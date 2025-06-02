@@ -1,8 +1,8 @@
 import modal
-
-
-HF_TOKEN= # DO MODAL SECRET
-
+import os
+import subprocess
+import json
+from huggingface_hub import login, snapshot_download
 
 vllm_image = (
     modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.12")
@@ -26,7 +26,6 @@ vllm_cache_vol = modal.Volume.from_name("vllm-cache", create_if_missing=True)
 app = modal.App("openai-compatible-ROMOAMIGO-QWEN3-14B")
 
 N_GPU = 1  # tip: for best results, first upgrade to more powerful GPUs, and only then increase GPU count
-API_KEY =   # DO MODAQL SECRET  api key, for auth. for production use, replace with a modal.Secret
 
 MINUTES = 60  # seconds
 VLLM_PORT = 8000
@@ -37,14 +36,14 @@ VLLM_PORT = 8000
     scaledown_window=4 * MINUTES,  # how long should we stay up with no requests?
     timeout=10 * MINUTES,  # how long should we wait for container start?
     volumes={"/root/.cache/huggingface": hf_cache_vol,"/root/.cache/vllm": vllm_cache_vol,},
+    secrets=[modal.Secret.from_name("huggingface-secret"),
+             modal.Secret.from_name("custom-secret")],
 )
 @modal.concurrent(max_inputs=100)
 @modal.web_server(port=VLLM_PORT, startup_timeout=10 * MINUTES)
 def serve():
-    from huggingface_hub import login, snapshot_download
-    login(token=HF_TOKEN)
-    import subprocess
-    import json
+
+    login(token=os.environ["HF_TOKEN"])
 
     c_plus_plus_lora = snapshot_download(repo_id=REPO_ID)
 
@@ -81,7 +80,7 @@ def serve():
         "--port",
         str(VLLM_PORT),
         "--api-key",
-        API_KEY,
+        os.environ["API_KEY"],
         "--max-model-len",
         "131072",
         "--enable-auto-tool-choice",
