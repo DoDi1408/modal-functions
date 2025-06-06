@@ -1,9 +1,4 @@
 import modal
-from unsloth import FastLanguageModel
-from trl import SFTTrainer, SFTConfig
-import torch
-import datasets
-import os
 
 alpaca_prompt = """Below is an instruction that describes a task, paired with an incorrect input that provides further context. Write a response that appropriately completes the request.
 
@@ -38,20 +33,25 @@ app = modal.App("fine-tuning-some-model")
 
 @app.function(
     image=finetune_image,
-    gpu=f"A100-80GB:{N_GPU}",
+    gpu=f"A100:{N_GPU}",
     volumes={"/root/.cache/huggingface": hf_cache_vol},
     secrets=[modal.Secret.from_name("huggingface-secret")],
     timeout=4 * HOURS,
 )
 def finetune():
+    from unsloth import FastLanguageModel
+    from trl import SFTTrainer, SFTConfig
+    import datasets
+    import os
 
     print("Downloading model...")
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=BASE_MODEL_ID,
+        model_name=YOUR_LORA_ADAPTERS_ID,  # Load the adapters directly
         max_seq_length=4048,
         load_in_4bit=True,
         load_in_8bit=False,
-        full_finetuning=False,
+        full_finetuning=False,  # Keep as false when loading adapters
+        token=os.environ["HF_TOKEN"],
     )
 
     EOS_TOKEN = tokenizer.eos_token
@@ -81,19 +81,6 @@ def finetune():
     eval_dataset = train_and_test_AGAIN["test"]
 
 
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r=16,
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                        "gate_proj", "up_proj", "down_proj", ],
-        lora_alpha=16,
-        lora_dropout=0,
-        bias="none",
-        use_gradient_checkpointing="unsloth",
-        random_state=3407,
-        use_rslora=True,
-        loftq_config=None,
-    )
 
     trainer = SFTTrainer(
         model=model,
@@ -106,7 +93,7 @@ def finetune():
             gradient_accumulation_steps=4,
             warmup_steps=20,
             #num_train_epochs=1,
-            max_steps = 30,
+            max_steps = 10,
             learning_rate=2e-4,
             logging_steps=1,
             optim="adamw_8bit",
