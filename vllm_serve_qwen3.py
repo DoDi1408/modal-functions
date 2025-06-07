@@ -15,7 +15,7 @@ vllm_image = (
 )
 
 #REPO_ID = "Romoamigo/Qwen3-14B-LoRA-adapters"
-MODEL_NAME = "Qwen/Qwen3-30B-A3B"
+MODEL_NAME = "Qwen/Qwen3-32B-FP8"
 
 hf_cache_vol = modal.Volume.from_name("huggingface-cache", create_if_missing=True)
 vllm_cache_vol = modal.Volume.from_name("vllm-cache", create_if_missing=True)
@@ -28,7 +28,7 @@ VLLM_PORT = 8000
 
 @app.function(
     image=vllm_image,
-    gpu=f"A100-80GB:{N_GPU}",
+    gpu=f"L40S:{N_GPU}",
     scaledown_window=6 * MINUTES,  # how long should we stay up with no requests?
     timeout=12 * MINUTES,  # how long should we wait for container start?
     volumes={"/root/.cache/huggingface": hf_cache_vol,"/root/.cache/vllm": vllm_cache_vol,},
@@ -36,7 +36,7 @@ VLLM_PORT = 8000
              modal.Secret.from_name("custom-secret")],
 )
 @modal.concurrent(max_inputs=100)
-@modal.web_server(port=VLLM_PORT, startup_timeout=10 * MINUTES)
+@modal.web_server(port=VLLM_PORT, startup_timeout=20 * MINUTES)
 def serve():
     import os
     import subprocess
@@ -57,7 +57,7 @@ def serve():
 
     rope_scaling = {
         "rope_type": "yarn",
-        "factor": 4.0,
+        "factor": 1.5,
         "original_max_position_embeddings": 32768
     }
 
@@ -72,8 +72,6 @@ def serve():
         "serve",
         "--uvicorn-log-level=debug",
         MODEL_NAME,
-#        "--quantization",
-#        "fp8",
 #        "--revision",
 #        MODEL_REVISION,
         "--host",
@@ -83,7 +81,9 @@ def serve():
         "--api-key",
         os.environ["API_KEY"],
         "--max-model-len",
-        "131072",
+        "32768",
+        "--gpu_memory_utilization",
+        "0.95",
         "--enable-auto-tool-choice",
         "--tool-call-parser",
         "hermes",
@@ -94,8 +94,8 @@ def serve():
         #"--enable-lora",
         #"--lora-modules",
         #quoted_lora_config_json_str,
-        "--rope-scaling",
-        quoted_rope_scaling_json_str,
+        #"--rope-scaling",
+        #quoted_rope_scaling_json_str,
     ]
 
     subprocess.Popen(" ".join(cmd), shell=True)
