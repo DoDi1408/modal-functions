@@ -57,7 +57,7 @@ def serve():
 
     rope_scaling = {
         "rope_type": "yarn",
-        "factor": 4,
+        "factor": 3.4,
         "original_max_position_embeddings": 32768
     }
 
@@ -81,7 +81,7 @@ def serve():
         "--api-key",
         os.environ["API_KEY"],
         "--max-model-len",
-        "131072",
+        "111312",
         "--gpu_memory_utilization",
         "0.95",
         "--enable-auto-tool-choice",
